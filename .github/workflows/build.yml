@@ -27,7 +27,7 @@ jobs:
 
     - name: Clone OpenWrt
       run: |
-        git clone https://git.openwrt.org/openwrt/openwrt.git
+        git clone https://github.com/openwrt/openwrt.git
         cd openwrt
         git checkout v25.12.0-rc4
 
@@ -42,7 +42,7 @@ jobs:
         cd openwrt
         DTS_FILE="target/linux/mediatek/dts/mt7988a-bananapi-bpi-r4.dts"
         sed -i '/&pcie2 {/,/};/{s/status = "okay"/status = "disabled"/}' "$DTS_FILE"
-        grep -A3 'pcie2' "$DTS_FILE" | head -10
+        grep -A5 'pcie2' "$DTS_FILE" | head -10
 
     - name: Configure build
       run: |
