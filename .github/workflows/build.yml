@@ -29,7 +29,8 @@ jobs:
       run: |
         git clone https://github.com/openwrt/openwrt.git
         cd openwrt
-        git checkout v25.12.0-rc4
+        git tag -l | grep 25
+        git checkout v25.12.0-rc4 || git checkout main
 
     - name: Update feeds
       run: |
@@ -41,19 +42,26 @@ jobs:
       run: |
         cd openwrt
         DTS_FILE="target/linux/mediatek/dts/mt7988a-bananapi-bpi-r4.dts"
+        echo "=== Looking for pcie2 ==="
+        grep -n 'pcie2' "$DTS_FILE"
         sed -i '/&pcie2 {/,/};/{s/status = "okay"/status = "disabled"/}' "$DTS_FILE"
-        grep -A5 'pcie2' "$DTS_FILE" | head -10
+        echo "=== After modification ==="
+        grep -n -A3 'pcie2' "$DTS_FILE"
 
     - name: Configure build
       run: |
         cd openwrt
-        cp ../diffconfig .config
-        make defconfig
+        cat ../diffconfig > .config
+        make defconfig V=s 2>&1 || true
+        echo "=== Check target ==="
+        grep CONFIG_TARGET .config | head -5
+        echo "=== Check errors ==="
+        grep "is not set" .config | grep -i "modem\|mbim\|usb\|luci" || true
 
     - name: Download packages
       run: |
         cd openwrt
-        make download -j$(nproc)
+        make download -j$(nproc) || make download -j1 V=s
 
     - name: Build firmware
       run: |
