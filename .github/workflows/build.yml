@@ -15,7 +15,6 @@ jobs:
       run: |
         sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
         sudo docker image prune --all --force
-        df -h
 
     - name: Install dependencies
       run: |
@@ -29,8 +28,10 @@ jobs:
       run: |
         git clone https://github.com/openwrt/openwrt.git
         cd openwrt
-        git tag -l | grep 25
-        git checkout v25.12.0-rc4 || git checkout main
+        echo "=== Available 25.x tags ==="
+        git tag -l | grep -i "25\|24.10"
+        echo "=== Trying checkout ==="
+        git checkout 12374d88b9 || git checkout v24.10.0
 
     - name: Update feeds
       run: |
@@ -41,9 +42,9 @@ jobs:
     - name: Disable pcie2 for USB3 mode
       run: |
         cd openwrt
-        DTS_FILE="target/linux/mediatek/dts/mt7988a-bananapi-bpi-r4.dts"
-        echo "=== Looking for pcie2 ==="
-        grep -n 'pcie2' "$DTS_FILE"
+        DTS_FILE=$(find target/linux/mediatek/dts/ -name "*bpi-r4.dts" | head -1)
+        echo "=== DTS file: $DTS_FILE ==="
+        grep -n 'pcie2' "$DTS_FILE" || echo "pcie2 not found in DTS"
         sed -i '/&pcie2 {/,/};/{s/status = "okay"/status = "disabled"/}' "$DTS_FILE"
         echo "=== After modification ==="
         grep -n -A3 'pcie2' "$DTS_FILE"
@@ -51,12 +52,18 @@ jobs:
     - name: Configure build
       run: |
         cd openwrt
-        cat ../diffconfig > .config
-        make defconfig V=s 2>&1 || true
-        echo "=== Check target ==="
-        grep CONFIG_TARGET .config | head -5
-        echo "=== Check errors ==="
-        grep "is not set" .config | grep -i "modem\|mbim\|usb\|luci" || true
+        echo "CONFIG_TARGET_mediatek=y" > .config
+        echo "CONFIG_TARGET_mediatek_filogic=y" >> .config
+        echo "CONFIG_TARGET_mediatek_filogic_DEVICE_bananapi_bpi-r4=y" >> .config
+        make defconfig
+        echo "=== Target check ==="
+        grep "CONFIG_TARGET_mediatek_filogic_DEVICE_bananapi_bpi-r4" .config
+
+    - name: Add packages to config
+      run: |
+        cd openwrt
+        cat ../diffconfig >> .config
+        make defconfig
 
     - name: Download packages
       run: |
