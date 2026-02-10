@@ -15,6 +15,7 @@ jobs:
       run: |
         sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
         sudo docker image prune --all --force
+        df -h
 
     - name: Install dependencies
       run: |
@@ -28,16 +29,11 @@ jobs:
       run: |
         git clone https://github.com/openwrt/openwrt.git
         cd openwrt
-        git checkout v25.12.0-rc4
-
-    - name: Fix feeds to use GitHub mirrors
-      run: |
-        cd openwrt
-        sed -i 's|https://git.openwrt.org/feed/packages.git|https://github.com/openwrt/packages.git|' feeds.conf.default
-        sed -i 's|https://git.openwrt.org/project/luci.git|https://github.com/openwrt/luci.git|' feeds.conf.default
-        sed -i 's|https://git.openwrt.org/feed/routing.git|https://github.com/openwrt/routing.git|' feeds.conf.default
-        sed -i 's|https://git.openwrt.org/feed/telephony.git|https://github.com/openwrt/telephony.git|' feeds.conf.default
-        cat feeds.conf.default
+        echo "=== Available tags ==="
+        git tag -l | grep "24.10\|25" | tail -20
+        git checkout v24.10.0 || git checkout main
+        echo "=== Checked out ==="
+        git describe --tags 2>/dev/null || git log --oneline -1
 
     - name: Update feeds
       run: |
@@ -45,29 +41,35 @@ jobs:
         ./scripts/feeds update -a
         ./scripts/feeds install -a
 
-    - name: Disable pcie2 for USB3 mode
+    - name: Configure and initial prepare
       run: |
         cd openwrt
-        DTS_FILE="target/linux/mediatek/dts/mt7988a-bananapi-bpi-r4.dts"
-        sed -i '/&pcie2 {/,/};/{s/status = "okay"/status = "disabled"/}' "$DTS_FILE"
-        echo "=== After modification ==="
-        grep -n -A3 'pcie2' "$DTS_FILE"
-
-    - name: Configure build
-      run: |
-        cd openwrt
-        cp ../diffconfig .config
+        cat ../diffconfig > .config
         make defconfig
+        echo "=== Config target ==="
+        grep "CONFIG_TARGET_mediatek_filogic_DEVICE" .config | head -5
+        make -j$(nproc) download
+        make -j$(nproc) target/linux/compile || make -j1 V=s target/linux/compile
 
-    - name: Download packages
+    - name: Modify DTS for USB3 mode
       run: |
         cd openwrt
-        make download -j$(nproc) || make download -j1 V=s
+        DTS_FILE=$(find build_dir -name "mt7988a-bananapi-bpi-r4.dts" -path "*/linux-mediatek*" | head -1)
+        echo "=== Found DTS: $DTS_FILE ==="
+        if [ -z "$DTS_FILE" ]; then
+          echo "DTS not found in build_dir, trying source"
+          DTS_FILE="target/linux/mediatek/dts/mt7988a-bananapi-bpi-r4.dts"
+        fi
+        echo "=== Before ==="
+        grep -n -A3 'pcie2' "$DTS_FILE"
+        sed -i '/&pcie2 {/,/};/{s/status = "okay"/status = "disabled"/}' "$DTS_FILE"
+        echo "=== After ==="
+        grep -n -A3 'pcie2' "$DTS_FILE"
 
     - name: Build firmware
       run: |
         cd openwrt
-        make -j$(nproc) || make -j1 V=s
+        make -j$(nproc) world || make -j1 V=s world
 
     - name: Upload firmware
       uses: actions/upload-artifact@v4
