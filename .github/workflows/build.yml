@@ -44,37 +44,35 @@ jobs:
     - name: Configure (NyaMoe exact packages)
       run: |
         cd openwrt
-        cat > .config << 'EOF'
-CONFIG_TARGET_mediatek=y
-CONFIG_TARGET_mediatek_filogic=y
-CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_bananapi_bpi-r4=y
-CONFIG_PACKAGE_kmod-mtk-t7xx=y
-CONFIG_PACKAGE_kmod-phy-aquantia=y
-CONFIG_PACKAGE_kmod-sfp=y
-CONFIG_PACKAGE_kmod-wwan=y
-CONFIG_PACKAGE_kmod-usb-net-rndis=y
-CONFIG_PACKAGE_kmod-usb-serial=y
-CONFIG_PACKAGE_kmod-usb-serial-option=y
-CONFIG_PACKAGE_kmod-usb3=y
-CONFIG_PACKAGE_kmod-usb-net-cdc-ncm=y
-CONFIG_PACKAGE_kmod-usb-net-cdc-mbim=y
-CONFIG_PACKAGE_kmod-usb-wdm=y
-CONFIG_PACKAGE_kmod-usb-serial-qualcomm=y
-CONFIG_PACKAGE_luci=y
-CONFIG_PACKAGE_luci-proto-mbim=y
-CONFIG_PACKAGE_luci-proto-modemmanager=y
-CONFIG_PACKAGE_luci-proto-ncm=y
-CONFIG_PACKAGE_modemmanager=y
-CONFIG_PACKAGE_umbim=y
-CONFIG_PACKAGE_comgt=y
-CONFIG_PACKAGE_pciutils=y
-CONFIG_PACKAGE_usbutils=y
-CONFIG_PACKAGE_usb-modeswitch=y
-CONFIG_PACKAGE_block-mount=y
-CONFIG_PACKAGE_nano=y
-CONFIG_PACKAGE_curl=y
-CONFIG_PACKAGE_picocom=y
-EOF
+        echo "CONFIG_TARGET_mediatek=y" > .config
+        echo "CONFIG_TARGET_mediatek_filogic=y" >> .config
+        echo "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_bananapi_bpi-r4=y" >> .config
+        echo "CONFIG_PACKAGE_kmod-mtk-t7xx=y" >> .config
+        echo "CONFIG_PACKAGE_kmod-phy-aquantia=y" >> .config
+        echo "CONFIG_PACKAGE_kmod-sfp=y" >> .config
+        echo "CONFIG_PACKAGE_kmod-wwan=y" >> .config
+        echo "CONFIG_PACKAGE_kmod-usb-net-rndis=y" >> .config
+        echo "CONFIG_PACKAGE_kmod-usb-serial=y" >> .config
+        echo "CONFIG_PACKAGE_kmod-usb-serial-option=y" >> .config
+        echo "CONFIG_PACKAGE_kmod-usb3=y" >> .config
+        echo "CONFIG_PACKAGE_kmod-usb-net-cdc-ncm=y" >> .config
+        echo "CONFIG_PACKAGE_kmod-usb-net-cdc-mbim=y" >> .config
+        echo "CONFIG_PACKAGE_kmod-usb-wdm=y" >> .config
+        echo "CONFIG_PACKAGE_kmod-usb-serial-qualcomm=y" >> .config
+        echo "CONFIG_PACKAGE_luci=y" >> .config
+        echo "CONFIG_PACKAGE_luci-proto-mbim=y" >> .config
+        echo "CONFIG_PACKAGE_luci-proto-modemmanager=y" >> .config
+        echo "CONFIG_PACKAGE_luci-proto-ncm=y" >> .config
+        echo "CONFIG_PACKAGE_modemmanager=y" >> .config
+        echo "CONFIG_PACKAGE_umbim=y" >> .config
+        echo "CONFIG_PACKAGE_comgt=y" >> .config
+        echo "CONFIG_PACKAGE_pciutils=y" >> .config
+        echo "CONFIG_PACKAGE_usbutils=y" >> .config
+        echo "CONFIG_PACKAGE_usb-modeswitch=y" >> .config
+        echo "CONFIG_PACKAGE_block-mount=y" >> .config
+        echo "CONFIG_PACKAGE_nano=y" >> .config
+        echo "CONFIG_PACKAGE_curl=y" >> .config
+        echo "CONFIG_PACKAGE_picocom=y" >> .config
         make defconfig
         echo "=== Config verification ==="
         grep -c "=y" .config
@@ -106,26 +104,19 @@ EOF
         cd openwrt
         echo "=== Finding BPI-R4 DTS file ==="
         DTS_FILE=$(find build_dir -name "mt7988a-bananapi-bpi-r4.dts" 2>/dev/null | head -1)
-
         if [ -z "$DTS_FILE" ]; then
           echo "ERROR: DTS not found! Listing all mediatek dts:"
           find build_dir -name "*.dts" -path "*mediatek*" 2>/dev/null
           exit 1
         fi
-
         echo "Found: $DTS_FILE"
         echo ""
         echo "=== BEFORE modification (pcie2 section) ==="
         grep -n -B1 -A5 '&pcie2' "$DTS_FILE"
-
-        # NyaMoe's exact modification: disable pcie2 to force USB3 mode
         sed -i '/&pcie2 {/,/};/{s/status = "okay"/status = "disabled"/}' "$DTS_FILE"
-
         echo ""
         echo "=== AFTER modification (pcie2 section) ==="
         grep -n -B1 -A5 '&pcie2' "$DTS_FILE"
-
-        # Verify
         if grep -A5 '&pcie2' "$DTS_FILE" | grep -q 'disabled'; then
           echo ""
           echo "SUCCESS: pcie2 set to disabled - FM350 will use USB3 mode"
@@ -138,19 +129,15 @@ EOF
       run: |
         cd openwrt
         echo "=== Starting full build at $(date) ==="
-        echo "WARNING: Do NOT run make clean or download (overwrites DTS change)"
         make -j$(nproc) world 2>&1 | tee /tmp/build.log | tail -5
         RET=${PIPESTATUS[0]}
         if [ $RET -ne 0 ]; then
           echo "=== PARALLEL BUILD FAILED - retrying with V=s ==="
-          echo "=== Last 50 lines of failed build ==="
           tail -50 /tmp/build.log
-          echo "=== Retrying single-threaded with verbose ==="
           make -j1 V=s world 2>&1 | tee /tmp/build_verbose.log | tail -100
           RET=${PIPESTATUS[0]}
           if [ $RET -ne 0 ]; then
             echo "=== BUILD FAILED ==="
-            echo "=== Searching for errors ==="
             grep -i "error:" /tmp/build_verbose.log | tail -20
             exit $RET
           fi
@@ -166,7 +153,6 @@ EOF
         echo "=== BPI-R4 firmware files ==="
         ls -lh openwrt/bin/targets/mediatek/filogic/*bpi-r4* 2>/dev/null || echo "No BPI-R4 files"
         echo ""
-        echo "=== Disk usage ==="
         df -h /
 
     - name: Upload firmware
